@@ -1,9 +1,7 @@
 from __future__ import annotations
-
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
-
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 ROOT = Path(__file__).resolve().parent
@@ -46,7 +44,6 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('buffer', '0.05');
         """)
 
-
 def prediction(db, day, meal):
     registrations = db.execute("SELECT COUNT(*) n FROM registrations WHERE meal_date=? AND meal=? AND attending=1", (day, meal)).fetchone()["n"]
     prior = db.execute("SELECT attendance FROM outcomes WHERE meal=? AND meal_date<? ORDER BY meal_date DESC LIMIT 28", (meal, day)).fetchall()
@@ -56,7 +53,6 @@ def prediction(db, day, meal):
     estimate = round(0.8 * registrations + 0.2 * historical) if historical is not None and registrations else (round(historical) if historical is not None else registrations)
     capacity = int(db.execute("SELECT value FROM settings WHERE key='capacity'").fetchone()[0])
     return min(capacity, max(0, estimate)), registrations, historical
-
 
 def save_forecast_snapshot(db, day, meal):
     """Freeze the current forecast once, preserving the pre-service estimate."""
@@ -72,7 +68,6 @@ def save_forecast_snapshot(db, day, meal):
         (day, meal, predicted, registrations, historical, datetime.now().isoformat(timespec="seconds")),
     )
     return True
-
 
 @app.route("/")
 def dashboard():
@@ -139,7 +134,6 @@ def dashboard():
         feedback_summary=feedback_summary, recent_feedback=recent_feedback,
     )
 
-
 @app.route("/forecast", methods=["POST"])
 def lock_forecasts():
     init_db()
@@ -163,7 +157,6 @@ def lock_forecasts():
     else:
         flash("No new forecasts saved. Snapshots already exist or those meals have been recorded.", "error")
     return redirect(url_for("dashboard", date=day))
-
 
 @app.route("/waste-board")
 def waste_board():
@@ -199,7 +192,6 @@ def waste_board():
         total_meals=len(MEALS),
     )
 
-
 @app.route("/register", methods=["GET", "POST"])
 def register():
     init_db()
@@ -223,7 +215,6 @@ def register():
         with connect() as db:
             selected = [r["meal"] for r in db.execute("SELECT meal FROM registrations WHERE student=? AND meal_date=? AND attending=1", (student, day))]
     return render_template("register.html", meals=MEALS, student=student, day=day, selected=selected)
-
 
 @app.route("/feedback", methods=["GET", "POST"])
 def feedback():
@@ -255,7 +246,6 @@ def feedback():
             return redirect(url_for("feedback"))
     return render_template("feedback.html", meals=MEALS, today=today)
 
-
 @app.route("/record", methods=["POST"])
 def record():
     init_db()
@@ -271,7 +261,7 @@ def record():
     flash(f"{meal} outcome saved.", "success")
     return redirect(url_for("dashboard", date=day))
 
-
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)
+    
