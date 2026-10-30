@@ -24,6 +24,8 @@ Open http://127.0.0.1:5000. The SQLite database (`mess.db`) is created on first 
 - Forecast MAE compares saved pre-service forecasts with actual attendance. Older outcomes without a saved forecast are excluded.
 - Big-screen waste board at /waste-board: displays today's recorded leftovers, the last seven service days, and a meal-wise breakdown. It refreshes every minute and shows aggregate meal data only.
 
+- Admin dashboard includes a seven-day waste chart; days without meal records are shown as missing data rather than zero waste.
+
 ## Notes
 
 This is a local pilot, not a production deployment: there are no accounts or role-based access yet, and the default app secret and debug mode must be changed before hosting. The forecast is an explainable cold-start heuristic rather than a trained machine-learning model; collect enough meal history, then evaluate a proper baseline and regression models with a time-based holdout. Ingredient quantities are examples, not procurement instructions.

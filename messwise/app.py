@@ -87,8 +87,34 @@ def dashboard():
                 pred, regs, hist = prediction(db, day, meal)
             outcome = db.execute("SELECT * FROM outcomes WHERE meal_date=? AND meal=?", (day, meal)).fetchone()
             cards.append({"meal": meal, "predicted": pred, "registered": regs, "historical": round(hist) if hist is not None else None, "snapshot_saved": snapshot is not None, "outcome": outcome, "ingredients": {k: round(pred*v, 1) for k, v in RECIPES[meal].items() if v}})
-        totals = db.execute("SELECT COALESCE(SUM(leftovers),0) waste, COALESCE(SUM(attendance),0) served FROM outcomes WHERE meal_date=?", (day,)).fetchone()
-        history = db.execute("SELECT meal_date, SUM(attendance) attendance, SUM(leftovers) leftovers FROM outcomes WHERE meal_date>=? GROUP BY meal_date ORDER BY meal_date", ((date.fromisoformat(day)-timedelta(days=6)).isoformat(),)).fetchall()
+        totals = db.execute("SELECT COALESCE(SUM(leftovers),0) waste, COALESCE(SUM(attendance),0) served, COUNT(*) meals_logged FROM outcomes WHERE meal_date=?", (day,)).fetchone()
+        week_start = (date.fromisoformat(day) - timedelta(days=6)).isoformat()
+        history = db.execute(
+            "SELECT meal_date, SUM(attendance) attendance, SUM(leftovers) leftovers "
+            "FROM outcomes WHERE meal_date BETWEEN ? AND ? GROUP BY meal_date ORDER BY meal_date",
+            (week_start, day),
+        ).fetchall()
+        waste_by_day = {row["meal_date"]: row for row in db.execute(
+            "SELECT meal_date, SUM(leftovers) waste, COUNT(*) meals_logged "
+            "FROM outcomes WHERE meal_date BETWEEN ? AND ? GROUP BY meal_date",
+            (week_start, day),
+        ).fetchall()}
+        week_days = [date.fromisoformat(day) - timedelta(days=offset) for offset in range(6, -1, -1)]
+        max_waste = max((float(row["waste"]) for row in waste_by_day.values()), default=0.0)
+        week_waste = sum(float(row["waste"]) for row in waste_by_day.values())
+        week_meal_records = sum(int(row["meals_logged"]) for row in waste_by_day.values())
+        waste_chart = []
+        for service_day in week_days:
+            day_key = service_day.isoformat()
+            row = waste_by_day.get(day_key)
+            waste = float(row["waste"]) if row else None
+            waste_chart.append({
+                "label": service_day.strftime("%a"),
+                "date_label": service_day.strftime("%d %b %Y"),
+                "waste": waste,
+                "logged": row is not None,
+                "height": max(4, round(waste / max_waste * 100)) if waste is not None and max_waste else 0,
+            })
         performance = db.execute("""
             SELECT AVG(ABS(o.attendance - f.predicted)) mae, COUNT(*) forecast_count
             FROM outcomes o JOIN forecasts f
@@ -97,7 +123,8 @@ def dashboard():
     return render_template(
         "dashboard.html", day=day, cards=cards, totals=totals,
         history=history, mae=round(performance["mae"], 1) if performance["mae"] is not None else None,
-        forecast_count=performance["forecast_count"],
+        forecast_count=performance["forecast_count"], waste_chart=waste_chart,
+        week_waste=week_waste, week_meal_records=week_meal_records,
     )
 
 
