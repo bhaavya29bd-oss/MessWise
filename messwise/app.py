@@ -126,6 +126,41 @@ def lock_forecasts():
     return redirect(url_for("dashboard", date=day))
 
 
+@app.route("/waste-board")
+def waste_board():
+    init_db()
+    today = date.today().isoformat()
+    try:
+        day = date.fromisoformat(request.args.get("date", today)).isoformat()
+    except ValueError:
+        day = today
+    week_start = (date.fromisoformat(day) - timedelta(days=6)).isoformat()
+    with connect() as db:
+        daily = db.execute(
+            "SELECT COALESCE(SUM(leftovers), 0) waste, COUNT(*) meals_logged "
+            "FROM outcomes WHERE meal_date=?",
+            (day,),
+        ).fetchone()
+        weekly_waste = db.execute(
+            "SELECT COALESCE(SUM(leftovers), 0) waste FROM outcomes "
+            "WHERE meal_date BETWEEN ? AND ?",
+            (week_start, day),
+        ).fetchone()["waste"]
+        meal_rows = db.execute(
+            "SELECT meal, leftovers FROM outcomes WHERE meal_date=? "
+            "ORDER BY CASE meal WHEN 'Breakfast' THEN 1 WHEN 'Lunch' THEN 2 "
+            "WHEN 'Snacks' THEN 3 WHEN 'Dinner' THEN 4 ELSE 5 END",
+            (day,),
+        ).fetchall()
+    return render_template(
+        "waste_board.html", day=day,
+        day_label=date.fromisoformat(day).strftime("%A, %d %B %Y"),
+        today_waste=daily["waste"], weekly_waste=weekly_waste,
+        meals_logged=daily["meals_logged"], meal_rows=meal_rows,
+        total_meals=len(MEALS),
+    )
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     init_db()

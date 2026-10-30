@@ -22,6 +22,7 @@ Open http://127.0.0.1:5000. The SQLite database (`mess.db`) is created on first 
 - Daily overview and recent logged outcomes.
 - Pre-service forecast snapshots: use “Save forecast snapshot” before a meal to freeze the estimate for that date. Later registrations do not change a saved estimate.
 - Forecast MAE compares saved pre-service forecasts with actual attendance. Older outcomes without a saved forecast are excluded.
+- Big-screen waste board at /waste-board: displays today's recorded leftovers, the last seven service days, and a meal-wise breakdown. It refreshes every minute and shows aggregate meal data only.
 
 ## Notes
 
