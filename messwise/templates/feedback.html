@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block heading %}Meal feedback{% endblock %}
+{% block content %}
+<section class="feedback-wrap">
+  <article class="panel feedback-form-panel">
+    <div class="eyebrow">STUDENT VOICE</div>
+    <h2>How was your meal?</h2>
+    <p class="muted">Your feedback helps the mess team improve meals and plan better.</p>
+    <form class="feedback-form" method="post" action="{{ url_for('feedback') }}">
+      <div class="feedback-fields">
+        <label for="meal-date">Meal date
+          <input id="meal-date" type="date" name="meal_date" value="{{ today }}" max="{{ today }}" required>
+        </label>
+        <label for="meal-name">Meal
+          <select id="meal-name" name="meal" required>
+            {% for meal in meals %}<option value="{{ meal }}">{{ meal }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+      <fieldset class="rating-field">
+        <legend>How would you rate it?</legend>
+        <div class="rating-options">
+          {% for value in range(1, 6) %}
+          <label class="rating-option">
+            <input type="radio" name="rating" value="{{ value }}" required>
+            <span>{{ value }}</span>
+            <small>{% if value == 1 %}Poor{% elif value == 2 %}Fair{% elif value == 3 %}Okay{% elif value == 4 %}Good{% else %}Great{% endif %}</small>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <label for="comment">Anything else? <span class="muted">Optional</span>
+        <textarea id="comment" name="comment" rows="4" maxlength="500" placeholder="Share a suggestion about the meal, serving, or menu."></textarea>
+      </label>
+      <p class="privacy-note">No name or student ID is collected. Please leave personal details out of comments.</p>
+      <button class="button dark" type="submit">Send anonymous feedback</button>
+    </form>
+  </article>
+  <aside class="feedback-aside">
+    <span class="feedback-aside-mark">♡</span>
+    <h2>Small suggestions can improve the next meal.</h2>
+    <p>Ratings and comments are shared with the mess team as meal feedback. Be kind, specific, and constructive.</p>
+  </aside>
+</section>
+{% endblock %}

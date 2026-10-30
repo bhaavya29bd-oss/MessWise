@@ -37,6 +37,10 @@ def init_db():
             predicted INTEGER NOT NULL, registrations INTEGER NOT NULL,
             historical REAL, created_at TEXT NOT NULL,
             PRIMARY KEY(meal_date, meal));
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY, meal_date TEXT NOT NULL, meal TEXT NOT NULL,
+            rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+            comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         INSERT OR IGNORE INTO settings VALUES ('capacity', '500');
         INSERT OR IGNORE INTO settings VALUES ('buffer', '0.05');
@@ -120,11 +124,19 @@ def dashboard():
             FROM outcomes o JOIN forecasts f
               ON f.meal_date=o.meal_date AND f.meal=o.meal
         """).fetchone()
+        feedback_summary = db.execute(
+            "SELECT COUNT(*) submissions, AVG(rating) average_rating FROM feedback"
+        ).fetchone()
+        recent_feedback = db.execute(
+            "SELECT meal_date, meal, rating, comment, created_at FROM feedback "
+            "ORDER BY created_at DESC, id DESC LIMIT 5"
+        ).fetchall()
     return render_template(
         "dashboard.html", day=day, cards=cards, totals=totals,
         history=history, mae=round(performance["mae"], 1) if performance["mae"] is not None else None,
         forecast_count=performance["forecast_count"], waste_chart=waste_chart,
         week_waste=week_waste, week_meal_records=week_meal_records,
+        feedback_summary=feedback_summary, recent_feedback=recent_feedback,
     )
 
 
@@ -211,6 +223,37 @@ def register():
         with connect() as db:
             selected = [r["meal"] for r in db.execute("SELECT meal FROM registrations WHERE student=? AND meal_date=? AND attending=1", (student, day))]
     return render_template("register.html", meals=MEALS, student=student, day=day, selected=selected)
+
+
+@app.route("/feedback", methods=["GET", "POST"])
+def feedback():
+    init_db()
+    today = date.today().isoformat()
+    if request.method == "POST":
+        meal_date = request.form.get("meal_date", "")
+        meal = request.form.get("meal", "")
+        comment = request.form.get("comment", "").strip()
+        try:
+            submitted_date = date.fromisoformat(meal_date)
+            rating = int(request.form.get("rating", "0"))
+        except ValueError:
+            flash("Choose a valid meal date and rating.", "error")
+            return redirect(url_for("feedback"))
+        if meal not in MEALS or rating < 1 or rating > 5:
+            flash("Choose a meal and a rating from 1 to 5.", "error")
+        elif submitted_date > date.today():
+            flash("Feedback can be submitted for today or a past meal.", "error")
+        elif len(comment) > 500:
+            flash("Keep your comment to 500 characters or fewer.", "error")
+        else:
+            with connect() as db:
+                db.execute(
+                    "INSERT INTO feedback(meal_date, meal, rating, comment, created_at) VALUES(?,?,?,?,?)",
+                    (meal_date, meal, rating, comment, datetime.now().isoformat(timespec="seconds")),
+                )
+            flash("Thanks—your anonymous feedback has been saved.", "success")
+            return redirect(url_for("feedback"))
+    return render_template("feedback.html", meals=MEALS, today=today)
 
 
 @app.route("/record", methods=["POST"])

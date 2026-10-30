@@ -25,6 +25,7 @@ Open http://127.0.0.1:5000. The SQLite database (`mess.db`) is created on first 
 - Big-screen waste board at /waste-board: displays today's recorded leftovers, the last seven service days, and a meal-wise breakdown. It refreshes every minute and shows aggregate meal data only.
 
 - Admin dashboard includes a seven-day waste chart; days without meal records are shown as missing data rather than zero waste.
+- Anonymous meal feedback at `/feedback` with a 1–5 rating and optional comment; the dashboard shows the average rating and latest submissions.
 
 ## Notes
 
