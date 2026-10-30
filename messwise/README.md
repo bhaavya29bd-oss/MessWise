@@ -20,6 +20,8 @@ Open http://127.0.0.1:5000. The SQLite database (`mess.db`) is created on first 
 - Illustrative lunch and dinner ingredient rates: rice 150 g, dal 100 g, vegetables 120 g per forecast student. Replace these with measured kitchen rates before operational use.
 - Admin entry for actual attendance, prepared, consumed, and leftover quantities.
 - Daily overview and recent logged outcomes.
+- Pre-service forecast snapshots: use “Save forecast snapshot” before a meal to freeze the estimate for that date. Later registrations do not change a saved estimate.
+- Forecast MAE compares saved pre-service forecasts with actual attendance. Older outcomes without a saved forecast are excluded.
 
 ## Notes
 

@@ -32,6 +32,11 @@ def init_db():
             attendance INTEGER NOT NULL, prepared REAL NOT NULL DEFAULT 0,
             consumed REAL NOT NULL DEFAULT 0, leftovers REAL NOT NULL DEFAULT 0,
             UNIQUE(meal_date, meal));
+        CREATE TABLE IF NOT EXISTS forecasts (
+            meal_date TEXT NOT NULL, meal TEXT NOT NULL,
+            predicted INTEGER NOT NULL, registrations INTEGER NOT NULL,
+            historical REAL, created_at TEXT NOT NULL,
+            PRIMARY KEY(meal_date, meal));
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         INSERT OR IGNORE INTO settings VALUES ('capacity', '500');
         INSERT OR IGNORE INTO settings VALUES ('buffer', '0.05');
@@ -49,6 +54,22 @@ def prediction(db, day, meal):
     return min(capacity, max(0, estimate)), registrations, historical
 
 
+def save_forecast_snapshot(db, day, meal):
+    """Freeze the current forecast once, preserving the pre-service estimate."""
+    existing = db.execute(
+        "SELECT 1 FROM forecasts WHERE meal_date=? AND meal=?", (day, meal)
+    ).fetchone()
+    if existing:
+        return False
+    predicted, registrations, historical = prediction(db, day, meal)
+    db.execute(
+        "INSERT INTO forecasts(meal_date, meal, predicted, registrations, historical, created_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (day, meal, predicted, registrations, historical, datetime.now().isoformat(timespec="seconds")),
+    )
+    return True
+
+
 @app.route("/")
 def dashboard():
     init_db()
@@ -56,13 +77,53 @@ def dashboard():
     with connect() as db:
         cards = []
         for meal in MEALS:
-            pred, regs, hist = prediction(db, day, meal)
+            snapshot = db.execute(
+                "SELECT predicted, registrations, historical FROM forecasts WHERE meal_date=? AND meal=?",
+                (day, meal),
+            ).fetchone()
+            if snapshot:
+                pred, regs, hist = snapshot["predicted"], snapshot["registrations"], snapshot["historical"]
+            else:
+                pred, regs, hist = prediction(db, day, meal)
             outcome = db.execute("SELECT * FROM outcomes WHERE meal_date=? AND meal=?", (day, meal)).fetchone()
-            cards.append({"meal": meal, "predicted": pred, "registered": regs, "historical": round(hist) if hist is not None else None, "outcome": outcome, "ingredients": {k: round(pred*v, 1) for k, v in RECIPES[meal].items() if v}})
+            cards.append({"meal": meal, "predicted": pred, "registered": regs, "historical": round(hist) if hist is not None else None, "snapshot_saved": snapshot is not None, "outcome": outcome, "ingredients": {k: round(pred*v, 1) for k, v in RECIPES[meal].items() if v}})
         totals = db.execute("SELECT COALESCE(SUM(leftovers),0) waste, COALESCE(SUM(attendance),0) served FROM outcomes WHERE meal_date=?", (day,)).fetchone()
         history = db.execute("SELECT meal_date, SUM(attendance) attendance, SUM(leftovers) leftovers FROM outcomes WHERE meal_date>=? GROUP BY meal_date ORDER BY meal_date", ((date.fromisoformat(day)-timedelta(days=6)).isoformat(),)).fetchall()
-        accuracy = db.execute("SELECT AVG(ABS(o.attendance - (SELECT COUNT(*) FROM registrations r WHERE r.meal_date=o.meal_date AND r.meal=o.meal AND r.attending=1))) mae FROM outcomes o").fetchone()["mae"]
-    return render_template("dashboard.html", day=day, cards=cards, totals=totals, history=history, mae=round(accuracy,1) if accuracy is not None else None)
+        performance = db.execute("""
+            SELECT AVG(ABS(o.attendance - f.predicted)) mae, COUNT(*) forecast_count
+            FROM outcomes o JOIN forecasts f
+              ON f.meal_date=o.meal_date AND f.meal=o.meal
+        """).fetchone()
+    return render_template(
+        "dashboard.html", day=day, cards=cards, totals=totals,
+        history=history, mae=round(performance["mae"], 1) if performance["mae"] is not None else None,
+        forecast_count=performance["forecast_count"],
+    )
+
+
+@app.route("/forecast", methods=["POST"])
+def lock_forecasts():
+    init_db()
+    day = request.form.get("meal_date", "")
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        flash("Choose a valid service date before saving forecasts.", "error")
+        return redirect(url_for("dashboard"))
+
+    saved = 0
+    with connect() as db:
+        for meal in MEALS:
+            completed = db.execute(
+                "SELECT 1 FROM outcomes WHERE meal_date=? AND meal=?", (day, meal)
+            ).fetchone()
+            if not completed:
+                saved += save_forecast_snapshot(db, day, meal)
+    if saved:
+        flash(f"Saved forecast snapshots for {saved} meal(s). These estimates are now frozen for this date.", "success")
+    else:
+        flash("No new forecasts saved. Snapshots already exist or those meals have been recorded.", "error")
+    return redirect(url_for("dashboard", date=day))
 
 
 @app.route("/register", methods=["GET", "POST"])
